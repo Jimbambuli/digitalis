@@ -236,11 +236,24 @@ to touch:
   which is correct on a bionic host where that slot holds a
   `pthread_internal_t*`. On glibc that slot is the DTV pointer, so the guest
   would start with garbage where bionic expects the pthread record. With this
-  flag on, `GuestThread::InitStaticTls` instead reads the id from
-  `TLS_SLOT_NATIVE_BRIDGE_GUEST_STATE`, where such a host seeds a synthetic
-  bionic pthread record before the thread starts. **Never set it on a real
+  flag on, `GuestThread::InitStaticTls` instead takes the guest's thread id and
+  `bionic_tls` slots from a bionic pthread record in
+  `TLS_SLOT_NATIVE_BRIDGE_GUEST_STATE`. The host may seed one there before the
+  thread starts; for a thread without one (e.g. created by glibc's
+  `pthread_create`) Berberis creates a zeroed record with the thread's tid and
+  its own `bionic_tls`, and frees it with the guest thread. **Never set it on a real
   bionic host** — it is off by default, and with it off the generated code is
   byte-identical to before (the ordinary `TLS_SLOT_THREAD_ID` load).
+- **System root (`BERBERIS_SYSTEM_ROOT` / `ro.berberis.system_root`)** — not
+  a flag but a path, for hosts that cannot install into `/system` (e.g. an
+  application bundle on a glibc host). Berberis then expects the tree at
+  `<root>/system/...` (guest linker, `app_process64`, vdso,
+  `libberberis_exec_region.so`), and the guest's own `/system/...` paths
+  (`openat`, `newfstatat`) resolve under the root, so the guest linker reads
+  `<root>/system/etc/ld.config.<arch>.txt`. That config must name the real
+  directories (`dir.system = <root>/system`, `<root>/system/${LIB}/arm64`).
+  The host's library search path must include `<root>/system/lib64`, which
+  holds the proxy libraries and the platform `libc++.so` they need.
 - **`disable-ir-check`** — skip the MachineIR validation passes in the
   optimizing backend. The checks stay on by default (and in host tests); a
   production image can ship this to drop the per-translation validation cost.
